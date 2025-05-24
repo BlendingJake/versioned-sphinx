@@ -13,7 +13,7 @@ description = "Versioned documentation with Sphinx"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICEN[CS]E.*"]
-keywords = ["sphinx", "documentation", "versioned", "docs"]
+keywords = ["documentation", "docs", "sphinx", "versions", "versioned"]
 classifiers = [
   "Programming Language :: Python"
 ]
@@ -33,7 +33,7 @@ Repository = "https://github.com/me/spam.git"
 Changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"
 
 [project.scripts]
-versioned-sphinx-cli = "versioned_sphinx"
+versioned-sphinx = "versioned_sphinx:main"
 
-[too.hatch.version]
+[tool.hatch.version]
 path = "src/versioned-sphinx/_version.py"

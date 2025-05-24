@@ -24,6 +24,17 @@ class Git:
         LOGGER.debug("Looking for git repo in %s", self._repo)
         self._verify_repo()
 
+    def checkout(self, branch_or_tag: "GitBranch | GitTag"):
+        """Checkout the current repository to a specific branch or tag"""
+        assert isinstance(
+            branch_or_tag, (GitBranch, GitTag)
+        ), "Argument must be GitBranch or GitTag"
+
+        if isinstance(branch_or_tag, GitBranch):
+            self.checkout_branch(branch_or_tag)
+        else:
+            self.checkout_tag(branch_or_tag)
+
     def checkout_branch(self, branch: "GitBranch | str"):
         """Checkout the current repository to specific branch"""
         self._verify_nothing_pending()

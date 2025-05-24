@@ -1,21 +1,12 @@
-from versioned_sphinx.git import Git
+from pathlib import Path
+from uuid import uuid4
+import tempfile
+from versioned_sphinx.sphinx import Sphinx
 
-a = Git("../JARCH-Vis")
+s = Sphinx(Path(r"C:\Users\Amych\Documents\Projects\sphinx-test"))
 
-original = a.get_current_branch()
-print(f"Original branch: {original}")
+print(s.get_conf_path())
 
-branches = a.get_branches()
-print(f"Got {len(branches)} branches")
-
-not_main = [b for b in branches if "master" not in b.branch]
-a.checkout_branch(not_main[0])
-print(f"Now in branch: {a.get_current_branch()}")
-
-tags = a.get_tags()
-print(f"Got {len(tags)} tags")
-
-a.checkout_tag(tags[0])
-print(f"Now in branch: {a.get_current_branch()}")
-
-a.checkout_branch("master")
+temp_dir = Path(tempfile.gettempdir()) / uuid4().hex
+print(temp_dir)
+s.build(Path(temp_dir))

@@ -1,3 +1,196 @@
+from os import getcwd
+from pathlib import Path
+import argparse
+import re
+from .config import Config
+from .git import Git, GitBranch, GitTag
+from .logger import ROOT_LOGGER as LOGGER
+from .sphinx import Sphinx
 from .version import __version__ as version
 
+
 __version__ = version
+
+
+def execute(config: Config, git: Git, sphinx: Sphinx):
+    """Orchestrate producing all of the versions, joining them
+    together, registering additional static files, and otherwise
+    generating the versioned docs.
+    """
+    LOGGER.info("versioned-sphinx v%s starting...")
+
+    branches = git.get_branches(config.vs_pattern)
+    LOGGER.info("Matched branches: %s", [b.branch for b in branches])
+
+    tags = git.get_tags(config.vs_pattern)
+    LOGGER.info("Matched tags: %s", [t.tag for t in tags])
+
+    original_branch = git.get_current_branch()
+    combined_with_name: list[tuple[str, GitBranch | GitTag]] = [
+        (
+            config.vs_display_name(bt) if config.vs_display_name else (
+                bt.branch if isinstance(bt, GitBranch) else bt.tag
+            ),
+            bt
+        ) for bt in sort_branches_and_tags(
+            config, filter_branches_and_tags(config, [*branches, *tags])
+        )
+    ]
+
+    for name, bt in combined_with_name:
+        LOGGER.info("%s building...", name)
+        git.checkout(bt)
+
+        assert config.vs_build_path
+        build_path = Path(config.vs_build_path) / name
+        build_path.mkdir(exist_ok=True)
+
+        sphinx.build(build_path)
+        LOGGER.info("%s built", name)
+
+    git.checkout_branch(original_branch)
+
+
+def filter_branches_and_tags(
+    config: Config, bts: list[GitBranch | GitTag]
+) -> list[GitBranch | GitTag]:
+    """Filter the list of branches and tags using methods provided by the config"""
+    if config.vs_filter:
+        return list(filter(config.vs_filter, bts))
+
+    return bts
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        "versioned-sphinx",
+        description=(
+            "Generate versioned documentation using sphinx. Each version "
+            + "is defined by a branch or tag. The docs are built for every "
+            + "matching branch/tag and then combined together. Several of "
+            + "these attributes can also be defined in conf.py."
+        ),
+    )
+
+    parser.add_argument(
+        "-p",
+        "--pattern",
+        type=str,
+        help=(
+            "The glob-style pattern which branches and tags must match "
+            + "to use when generating the versioned docs. Can also be "
+            + "defined in conf.py with 'vs_pattern'. "
+        ),
+    )
+
+    parser.add_argument(
+        "-r",
+        "--repo",
+        type=Path,
+        help=(
+            "The path of the repository containing the project to document. "
+            + "If not provided, the current working path will be used."
+        ),
+    )
+
+    parser.add_argument(
+        "-c",
+        "--conf",
+        type=Path,
+        help=(
+            "The path of the sphinx project's conf.py file, if it is in "
+            + "a non-standard location. By default, 'repo' / docs will be "
+            + "searched."
+        ),
+    )
+
+    parser.add_argument(
+        "-b",
+        "--build-path",
+        type=Path,
+        help=(
+            "The path of sphinx's build folder, either as a path relative to "
+            + "'repo' or an absolute path. By default, this will be root / 'docs' "
+            + "/ 'build'."
+        ),
+    )
+
+    parser.add_argument(
+        "-v",
+        "--version",
+        type=str,
+        help=(
+            "The name of the branch or tag representing the current version. "
+            + "This can also be defined with 'vs_current_version' in conf.py."
+        ),
+    )
+
+    args = parser.parse_args()
+
+    if args.repo:
+        assert args.repo.exists(), f"Provided repo path '{args.repo}' does not exist"
+        repo: Path = args.repo
+    else:
+        repo = Path(getcwd())
+
+    if args.conf:
+        assert args.conf.exists(), f"Provided conf.py path '{args.conf}' does not exist"
+        conf: Path | None = args.conf
+    else:
+        conf = None
+
+    if args.build:
+        assert args.build.exists(), f"Provided build path '{args.build}' does not exist"
+        build: Path = args.build
+    else:
+        build = repo / "docs" / "build"
+
+    git = Git(repo)
+    sphinx = Sphinx(repo, conf)
+    config = Config.parse(
+        sphinx.load_conf_file(),
+        {
+            "vs_build_path": build,
+            "vs_current_version": args.version,
+            "vs_pattern": args.pattern,
+        },
+    )
+
+    LOGGER.info("Will operate in '%s'", repo)
+    execute(config, git, sphinx)
+
+
+NAT_SORT_PATTERN = re.compile(r"(\d+)")
+
+
+def natural_sort_tuple(key: str) -> list[str | int]:
+    """Turn a string key into a tuple which can be sorted to
+    apply a natural sort. To do this, any numeric parts are split
+    into their own value in the tuple, turning something like ``v1.0``
+    into ``('v', 1, '.', 0)``, which will then sort correctly when compared
+    with something like ``v10.0`` which gets converted to ``('v', 10, '.', 0)``.
+    """
+    return [int(v) if v.isdigit() else v for v in NAT_SORT_PATTERN.split(key)]
+
+
+def sort_branches_and_tags(
+    config: Config, bts: list[GitBranch | GitTag]
+) -> list[GitBranch | GitTag]:
+    """Sort the list of branches and tags using either
+    :attr:`~versioned_sphinx.config.Config.vs_sort` or a natural sort
+    performed on the name of the branch or tag (or the result of applying
+    :attr:`~versioned_sphinx.config.Config.vs_display_name` if present).
+    """
+    if config.vs_sort:
+        return config.vs_sort(bts)
+
+    if config.vs_display_name:
+        key_to_value = [(config.vs_display_name(bt), bt) for bt in bts]
+    else:
+        key_to_value = [
+            (natural_sort_tuple(bt.branch if isinstance(bt, GitBranch) else bt.tag), bt)
+            for bt in bts
+        ]
+
+    sort = sorted(key_to_value, key=lambda x: x[0], reverse=True)
+    return [kv[1] for kv in sort]
