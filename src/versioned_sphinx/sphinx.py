@@ -6,12 +6,24 @@ from os import walk
 from pathlib import Path
 from types import ModuleType
 import importlib
+import shutil
 import subprocess
 import sys
-from .logger import get_logger
+from versioned_sphinx.logger import get_logger
 
 
 LOGGER = get_logger("sphinx")
+REDIRECT_HTML = """
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="refresh" content="0; url='{primary_version}'" />
+    </head>
+    <body>
+        <p>Redirecting to primary version...</p>
+    </body>
+</html>
+"""
 
 
 class Sphinx:
@@ -80,6 +92,38 @@ class Sphinx:
             "build succeeded" in stdout
         ), f"Build did not succeed: {stdout.replace('\n', ' ')}"
 
+    @staticmethod
+    def consolidate_html_versions(versions: list[Path]):
+        """Consolidate from having a ``doctrees`` and ``html`` folder in each
+        version to moving all files from ``html`` up to the root of the
+        version folder. Going from:
+            * v1
+
+                * doctrees
+                * html
+
+                    * <files>
+
+        To:
+            * v1
+
+                <files>
+        """
+        for v in versions:
+            doctrees =  v / "doctrees"
+            LOGGER.debug("Removing '%s'...", doctrees)
+            shutil.rmtree(doctrees)
+
+            html = v / 'html'
+            LOGGER.debug("Moving '%s' -> '%s'...", html, v)
+            for item in html.iterdir():
+                if item.is_file():
+                    item.rename(v / item.name)
+                else:
+                    shutil.move(item, v / item.name)
+
+            shutil.rmtree(html)
+
     def get_conf_path(self) -> Path:
         """Get the filepath of 'conf.py'"""
         return self._conf_file
@@ -95,3 +139,9 @@ class Sphinx:
         sys.path = initial_path
 
         return conf
+    
+    def write_root_html(self, build_path: Path, primary_version: str):
+        with open(build_path / 'index.html', 'w', encoding='utf-8') as file:
+            file.write(REDIRECT_HTML.format(
+                primary_version=f"{primary_version}/index.html"
+            ))

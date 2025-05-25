@@ -8,9 +8,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 import subprocess
-from .logger import get_logger
+from versioned_sphinx.logger import get_logger
 
 
+__all__ = ["Git", "GitBranch", "GitTag"]
 LOGGER = get_logger("git")
 
 
@@ -39,11 +40,11 @@ class Git:
         """Checkout the current repository to specific branch"""
         self._verify_nothing_pending()
 
-        name = branch.branch if isinstance(branch, GitBranch) else branch
+        name = branch.name if isinstance(branch, GitBranch) else branch
         branches = self.get_branches(location="local")
         args: list[str] = ["checkout"]
 
-        if any(b.branch == name for b in branches):
+        if any(b.name == name for b in branches):
             args.append(name)
         else:
             args.extend(("-b", name))
@@ -54,7 +55,7 @@ class Git:
         """Checkout the current repository to a specific tag"""
         self._verify_nothing_pending()
 
-        name = tag.tag if isinstance(tag, GitTag) else tag
+        name = tag.name if isinstance(tag, GitTag) else tag
         self._execute_git_command(["checkout", name])
 
     def get_current_branch(self) -> str:
@@ -68,6 +69,16 @@ class Git:
         else:
             LOGGER.error("Unknown checkout: '%s'", first_line)
             raise ValueError("Unknown checkout point")
+
+    def get_current_hash(self) -> str:
+        """Get the hash of the most recent commit of the currently
+        checked-out point of the repository.
+
+        >>> git.get_current_hash()
+        'cff3eba74bf40e62331be14a9cafe2b152cb16bb'
+        """
+        response = self._execute_git_command(["rev-parse", "HEAD"])
+        return response.strip()
 
     def get_branches(
         self,
@@ -105,9 +116,9 @@ class Git:
 
             branches.append(
                 GitBranch(
-                    branch_name,
-                    datetime.strptime(time_string, "%Y-%m-%dT%H:%M:%S%z"),
-                    remote,
+                    name=branch_name,
+                    date=datetime.strptime(time_string, "%Y-%m-%dT%H:%M:%S%z"),
+                    remote=remote,
                 )
             )
 
@@ -124,7 +135,7 @@ class Git:
         ]
         if pattern:
             args.append("-l")
-            args.append(f"'{pattern}")
+            args.append(pattern)
 
         response = self._execute_git_command(args)
         tags: list[GitTag] = []
@@ -150,8 +161,9 @@ class Git:
         try:
             stdout = response.stdout.decode().strip()
             LOGGER.debug(
-                "command 'git %s' yielded '%s'",
+                "command 'git %s' in '%s' yielded '%s'",
                 " ".join(args),
+                self._repo,
                 stdout.replace("\n", " "),
             )
             return stdout
@@ -160,11 +172,11 @@ class Git:
             raise RuntimeError("Execution of git command failed")
 
     def _verify_nothing_pending(self):
-        """Raise an error if the repo has any uncomitted changes"""
+        """Raise an error if the repo has any uncommitted changes"""
         response = self._execute_git_command(["status"])
         assert (
             "nothing to commit, working tree clean" in response
-        ), "Repository has uncommitted changes"
+        ), f"Repository has uncommitted changes: {response}"
 
     def _verify_repo(self):
         """Raise an error if the current path isn't actually a git repository"""
@@ -176,10 +188,10 @@ class Git:
 class GitBranch:
     """Details about a branch in a git repository"""
 
-    branch: str
-    """The name of the branch (including the origin)"""
     date: datetime
     """The date and time when the branch was created"""
+    name: str
+    """The name of the branch (including the origin)"""
     remote: bool
     """Whether the branch is remote or not"""
 
@@ -190,5 +202,5 @@ class GitTag:
 
     date: datetime
     """The date and time when the tag was created"""
-    tag: str
+    name: str
     """The name of the tag"""

@@ -1,0 +1,27 @@
+/* sphinx_rtd_theme */
+section div[role="navigation"] {
+    align-items: center;
+    display: flex;
+
+    > ul {
+        flex-grow: 1;
+        /* counteract padding-top: 5px on breadcrumbs */
+        margin-top: -5px;
+    }
+
+    .choices__inner {
+        border-color: #2980b9;
+    }
+
+    .choices__list--dropdown {
+        .choices__item:hover, .choices__item[aria-selected=true] {
+            background-color: #2980b9 !important;
+            color: white !important;
+        }
+    }
+}
+
+.versioned-sphinx {
+    margin-right: 1em;
+    min-width: 75px;
+}

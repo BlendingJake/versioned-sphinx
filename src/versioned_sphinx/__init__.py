@@ -1,12 +1,15 @@
+from dataclasses import asdict
 from os import getcwd
 from pathlib import Path
 import argparse
+import json
+import shutil
 import re
-from .config import Config
-from .git import Git, GitBranch, GitTag
-from .logger import ROOT_LOGGER as LOGGER
-from .sphinx import Sphinx
-from .version import __version__ as version
+from versioned_sphinx.config import Config
+from versioned_sphinx.git import Git, GitBranch, GitTag
+from versioned_sphinx.logger import ROOT_LOGGER as LOGGER
+from versioned_sphinx.sphinx import Sphinx
+from versioned_sphinx.version import __version__ as version
 
 
 __version__ = version
@@ -17,38 +20,89 @@ def execute(config: Config, git: Git, sphinx: Sphinx):
     together, registering additional static files, and otherwise
     generating the versioned docs.
     """
-    LOGGER.info("versioned-sphinx v%s starting...")
+    LOGGER.info("versioned-sphinx v%s starting...", version)
+
+    build_path = config.build_path()
+    LOGGER.info("Cleaning build directory '%s'...", build_path)
+    if build_path.exists():
+        shutil.rmtree(build_path)
+    build_path.mkdir(exist_ok=True)
 
     branches = git.get_branches(config.vs_pattern)
-    LOGGER.info("Matched branches: %s", [b.branch for b in branches])
+    LOGGER.info("Matched branches: %s", [b.name for b in branches])
 
     tags = git.get_tags(config.vs_pattern)
-    LOGGER.info("Matched tags: %s", [t.tag for t in tags])
+    LOGGER.info("Matched tags: %s", [t.name for t in tags])
 
     original_branch = git.get_current_branch()
     combined_with_name: list[tuple[str, GitBranch | GitTag]] = [
         (
-            config.vs_display_name(bt) if config.vs_display_name else (
-                bt.branch if isinstance(bt, GitBranch) else bt.tag
+            (
+                config.vs_display_name(bt)
+                if config.vs_display_name
+                else bt.name
             ),
-            bt
-        ) for bt in sort_branches_and_tags(
+            bt,
+        )
+        for bt in sort_branches_and_tags(
             config, filter_branches_and_tags(config, [*branches, *tags])
         )
     ]
 
+    if config.vs_current_version:
+        primary_version: str | None = None
+        for name, bt in combined_with_name:
+            if config.vs_current_version in (name, bt.name):
+                primary_version = name
+
+        assert primary_version, f"Not branch or tag found matching '{config.vs_current_version}'"
+    else:
+        primary_version = combined_with_name[0][0]
+
+    built_paths: list[Path] = []
     for name, bt in combined_with_name:
         LOGGER.info("%s building...", name)
         git.checkout(bt)
 
-        assert config.vs_build_path
-        build_path = Path(config.vs_build_path) / name
-        build_path.mkdir(exist_ok=True)
+        version_path = build_path / name
+        built_paths.append(version_path)
+        version_path.mkdir(exist_ok=True)
 
-        sphinx.build(build_path)
+        sphinx.build(version_path)
         LOGGER.info("%s built", name)
 
     git.checkout_branch(original_branch)
+
+    LOGGER.info("Consolidating HTML versions...")
+    sphinx.consolidate_html_versions(built_paths)
+
+    LOGGER.info("Writing root HTML file...")
+    sphinx.write_root_html(build_path, primary_version)
+
+    LOGGER.info("Writing CSS and JS files...")
+    for f in (Path(__file__).parent / 'static').iterdir():
+        shutil.copy(
+            f,
+            build_path / f.name
+        )
+
+    LOGGER.info("Writing version details...")
+    with open(build_path / "versioned_sphinx.js", 'a', encoding='utf-8') as file:
+        file.write("\n\n")
+        file.write("VERSIONS = ")
+        file.write(
+            json.dumps(
+                [
+                    {
+                        "display_name": name,
+                        "primary": primary_version == name,
+                        **asdict(bt)
+                    } for name, bt in combined_with_name
+                ],
+                default=str
+            )
+        )
+        file.write(";\n")
 
 
 def filter_branches_and_tags(
@@ -121,7 +175,8 @@ def main():
         type=str,
         help=(
             "The name of the branch or tag representing the current version. "
-            + "This can also be defined with 'vs_current_version' in conf.py."
+            + "This can also be defined with 'vs_current_version' in conf.py. "
+            + "Defaults to the 'newest' version after sorting."
         ),
     )
 
@@ -139,9 +194,11 @@ def main():
     else:
         conf = None
 
-    if args.build:
-        assert args.build.exists(), f"Provided build path '{args.build}' does not exist"
-        build: Path = args.build
+    if args.build_path:
+        assert (
+            args.build_path.exists()
+        ), f"Provided build path '{args.build_path}' does not exist"
+        build: Path = args.build_path
     else:
         build = repo / "docs" / "build"
 
@@ -188,9 +245,13 @@ def sort_branches_and_tags(
         key_to_value = [(config.vs_display_name(bt), bt) for bt in bts]
     else:
         key_to_value = [
-            (natural_sort_tuple(bt.branch if isinstance(bt, GitBranch) else bt.tag), bt)
+            (natural_sort_tuple(bt.name if isinstance(bt, GitBranch) else bt.name), bt)
             for bt in bts
         ]
 
     sort = sorted(key_to_value, key=lambda x: x[0], reverse=True)
     return [kv[1] for kv in sort]
+
+
+if __name__ == "__main__":
+    main()

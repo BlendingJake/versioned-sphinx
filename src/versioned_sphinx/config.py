@@ -3,7 +3,12 @@ from datetime import datetime
 from pathlib import Path
 from types import ModuleType
 from typing import Callable
-from .git import GitBranch, GitTag
+from versioned_sphinx.git import GitBranch, GitTag
+
+
+DisplayName = Callable[[GitBranch | GitTag], str]
+Filter = Callable[[GitBranch | GitTag], bool]
+Sort = Callable[[list[GitBranch | GitTag]], list[GitBranch | GitTag]]
 
 
 @dataclass
@@ -22,7 +27,7 @@ class Config:
     which should be displayed by default.
     """
 
-    vs_display_name: Callable[[GitBranch | GitTag], str] | None = None
+    vs_display_name: DisplayName | None = None
     """A function which takes a branch or tag and returns a name
     which will be used in the final documentation and for sorting, unless
     :attr:`vs_sort` is otherwise supplied.
@@ -38,7 +43,7 @@ class Config:
                 return branch_or_tag.name[1:]
     """
 
-    vs_filter: Callable[[GitBranch | GitTag], bool] | None = None
+    vs_filter: Filter | None = None
     """A filter applied to branches and tags found matching :attr:`vs_pattern`
     to produce the final list of versions for which documentation will be
     generated.
@@ -51,8 +56,7 @@ class Config:
                     or branch_or_tag.branch.startswith('rc/')
                 )
             else:
-                return re.match(r'v\d+\.\d+\.\d+', branch_or_tag.name)
-    
+                return re.match(r'v\\d+\\.\\d+\\.\\d+', branch_or_tag.name)
     """
 
     vs_pattern: str | None = None
@@ -61,14 +65,22 @@ class Config:
     matching, use :attr:`vs_filter`.
     """
 
-    vs_sort: Callable[[list[GitBranch | GitTag]], list[GitBranch | GitTag]] | None = (
-        None
-    )
+    vs_sort: Sort | None = None
     """A custom sorter indicating the order of the versions. If this is
     not provided, then a natural sort will be performed on the branch/tag
     name directly, or on the result of :attr:`vs_display_name`. The sort
     should have the most recent version sorted first (descending sort).
     """
+
+    def build_path(self) -> Path:
+        """The absolute build path with users expanded"""
+        assert self.vs_build_path
+
+        b = Path(self.vs_build_path)
+        if b.is_absolute():
+            return b
+
+        return b.expanduser().resolve()
 
     @staticmethod
     def parse(conf: ModuleType, command_line: dict[str, Path | str]) -> "Config":

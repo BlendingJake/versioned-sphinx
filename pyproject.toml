@@ -15,7 +15,9 @@ license = "MIT"
 license-files = ["LICEN[CS]E.*"]
 keywords = ["documentation", "docs", "sphinx", "versions", "versioned"]
 classifiers = [
+  "Framework :: Sphinx :: Extension",
   "Programming Language :: Python"
+  
 ]
 
 [project.optional-dependencies]
