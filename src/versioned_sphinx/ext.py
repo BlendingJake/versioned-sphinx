@@ -10,13 +10,13 @@ def setup(app: Sphinx) -> ExtensionMetadata:
     added to the build.
     """
     for file in (Path(__file__).parent / "static").iterdir():
-        if file.suffix == '.css':
+        if file.suffix == ".css":
             app.add_css_file(f"../../{file.name}")
-        elif file.suffix == '.js':
+        elif file.suffix == ".js":
             app.add_js_file(f"../../{file.name}")
-    
+
     return {
         "parallel_read_safe": True,
         "parallel_write_safe": True,
-        "version": __version__
+        "version": __version__,
     }

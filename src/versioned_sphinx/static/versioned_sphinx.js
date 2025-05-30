@@ -1,9 +1,43 @@
 document.addEventListener("DOMContentLoaded", documentReady);
 
-const THEME_INJECT_POINT = {
-    sphinx_rtd_theme: "section div[role='navigation']"
-};
+/**
+ * This will be set at the bottom of the file during the build process.
+ * It is an object mapping each version's display name to the list of
+ * names of the HTML files for that version. It is used to ensure that,
+ * when switching to a new version, that the current file still exists
+ * there. If not, it will switch to the root of the new version. Example:
+ * 
+ * {
+ *      "0.0.1": [
+ *          "examples.html",
+ *          "genindex.html",
+ *          "index.html",
+ *      ]
+ * }
+ */
+let FILES_PER_VERSION;
 
+/**
+ * The CSS selector indicating where the version control should be injected
+ * as the first child. Predefined values are provided for certain themes and
+ * can be overridden (or provided for unsupported themes) by specifying 
+ * vs_inject_selector in conf.py.
+ */
+let THEME_INJECT_POINT;
+
+/**
+ * This will be set at the bottom of the file during the build process.
+ * It is an array of objects, each which has the key 'display_name: str' and
+ * 'primary: boolean', along with  all of the keys from either GitBranch 
+ * or GitTag. Example:
+ * 
+ * [{
+ *      display_name: "0.0.1",
+ *      primary: false,
+ *      date: "2025-05-25 21:03:33-04:00",
+ *      name: "v0.0.1"
+ * }]
+ */
 let VERSIONS;
 
 function determineCurrentVersion() {
@@ -12,7 +46,7 @@ function determineCurrentVersion() {
 }
 
 function documentReady() {
-    const navContainer = document.querySelector(THEME_INJECT_POINT.sphinx_rtd_theme);
+    const navContainer = document.querySelector(THEME_INJECT_POINT);
     
     const div = document.createElement('div');
     div.className = "versioned-sphinx";
@@ -45,6 +79,11 @@ function selectVersion(value) {
     const href = window.location.href;
     const currentVersion = determineCurrentVersion();
     const [base, path] = href.split(`/${currentVersion.display_name}/`);
-    
-    window.location.href = `${base}/${value}/${path}`;
+
+    const destFile = path.split("#")[0];
+    if (FILES_PER_VERSION[value].includes(destFile)) {
+        window.location.href = `${base}/${value}/${path}`;
+    } else {
+        window.location.href = `${base}/${value}/index.html`;
+    }
 }

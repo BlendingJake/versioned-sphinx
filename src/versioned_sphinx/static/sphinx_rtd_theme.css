@@ -14,9 +14,9 @@ section div[role="navigation"] {
     }
 
     .choices__list--dropdown {
-        .choices__item:hover, .choices__item[aria-selected=true] {
-            background-color: #2980b9 !important;
-            color: white !important;
+        .choices__item.is-selected[aria-selected=false] {
+            background-color: #2980b9;
+            color: white;
         }
     }
 }

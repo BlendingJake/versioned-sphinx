@@ -25,6 +25,14 @@ REDIRECT_HTML = """
 </html>
 """
 
+THEME_INJECT_POINT: dict[str, str] = {
+    "sphinx_rtd_theme": "section div[role='navigation']"
+}
+"""The CSS selector indicating where the versions control should
+be injected. The control will be inserted as the first child of this
+element.
+"""
+
 
 class Sphinx:
     """Mechanisms related to interacting with sphinx like actually
@@ -66,6 +74,7 @@ class Sphinx:
             ), f"Could not find 'conf.py' any where under '{docs_path}'"
             LOGGER.debug("Resolved 'conf.py' to %s", conf)
 
+        self._cached_conf: ModuleType | None = None
         self._conf_file = conf
         self._source_dir = conf.parent
 
@@ -110,11 +119,11 @@ class Sphinx:
                 <files>
         """
         for v in versions:
-            doctrees =  v / "doctrees"
+            doctrees = v / "doctrees"
             LOGGER.debug("Removing '%s'...", doctrees)
             shutil.rmtree(doctrees)
 
-            html = v / 'html'
+            html = v / "html"
             LOGGER.debug("Moving '%s' -> '%s'...", html, v)
             for item in html.iterdir():
                 if item.is_file():
@@ -128,20 +137,52 @@ class Sphinx:
         """Get the filepath of 'conf.py'"""
         return self._conf_file
 
+    def get_html_file_names(self, version: Path) -> list[str]:
+        """Go through the built HTML directory and get the names of
+        all of the HTML files for this version.
+        """
+        names: list[str] = []
+        for root, _, filenames in walk(version):
+            for filename in filenames:
+                path = Path(root) / filename
+                if path.suffix == ".html":
+                    names.append(str(path.relative_to(version)))
+
+        return names
+
+    @staticmethod
+    def get_theme_css_file(theme: str) -> Path | None:
+        """Get the path to the CSS file which should be included for
+        this theme, if it is a supported theme.
+        """
+        path = Path(__file__).parent / "static" / f"{theme}.css"
+        if path.exists():
+            return path
+
+        return None
+
+    @staticmethod
+    def get_theme_inject_location(theme: str) -> str | None:
+        """Get the CSS selector for the element where the version control
+        should be injected for this specific theme.
+        """
+        return THEME_INJECT_POINT.get(theme)
+
     def load_conf_file(self) -> ModuleType:
         """Import the 'conf.py' file and get all of the variables
         defined within it.
         """
-        initial_path = list(sys.path)
-        sys.path = [str(self._source_dir), *sys.path]
+        if not self._cached_conf:
+            initial_path = list(sys.path)
+            sys.path = [str(self._source_dir), *sys.path]
 
-        conf = importlib.import_module("conf")
-        sys.path = initial_path
+            self._cached_conf = importlib.import_module("conf")
+            sys.path = initial_path
 
-        return conf
-    
+        return self._cached_conf
+
     def write_root_html(self, build_path: Path, primary_version: str):
-        with open(build_path / 'index.html', 'w', encoding='utf-8') as file:
-            file.write(REDIRECT_HTML.format(
-                primary_version=f"{primary_version}/index.html"
-            ))
+        with open(build_path / "index.html", "w", encoding="utf-8") as file:
+            file.write(
+                REDIRECT_HTML.format(primary_version=f"{primary_version}/index.html")
+            )

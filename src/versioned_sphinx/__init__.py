@@ -21,6 +21,7 @@ def execute(config: Config, git: Git, sphinx: Sphinx):
     generating the versioned docs.
     """
     LOGGER.info("versioned-sphinx v%s starting...", version)
+    verify_configuration(config, git, sphinx)
 
     build_path = config.build_path()
     LOGGER.info("Cleaning build directory '%s'...", build_path)
@@ -37,11 +38,7 @@ def execute(config: Config, git: Git, sphinx: Sphinx):
     original_branch = git.get_current_branch()
     combined_with_name: list[tuple[str, GitBranch | GitTag]] = [
         (
-            (
-                config.vs_display_name(bt)
-                if config.vs_display_name
-                else bt.name
-            ),
+            (config.vs_display_name(bt) if config.vs_display_name else bt.name),
             bt,
         )
         for bt in sort_branches_and_tags(
@@ -55,7 +52,9 @@ def execute(config: Config, git: Git, sphinx: Sphinx):
             if config.vs_current_version in (name, bt.name):
                 primary_version = name
 
-        assert primary_version, f"Not branch or tag found matching '{config.vs_current_version}'"
+        assert (
+            primary_version
+        ), f"Not branch or tag found matching '{config.vs_current_version}'"
     else:
         primary_version = combined_with_name[0][0]
 
@@ -80,15 +79,57 @@ def execute(config: Config, git: Git, sphinx: Sphinx):
     sphinx.write_root_html(build_path, primary_version)
 
     LOGGER.info("Writing CSS and JS files...")
-    for f in (Path(__file__).parent / 'static').iterdir():
+    to_copy = ["choices.min.css", "choices.min.js", "versioned_sphinx.js"]
+    for f in to_copy:
+        p = Path(__file__).parent / "static" / f
+        shutil.copy(p, build_path / p.name)
+
+    # Handle control CSS
+    if config.vs_control_css:
+        if isinstance(config.vs_control_css, Path) or ".css" in config.vs_control_css:
+            p = Path(config.vs_control_css)
+            if not p.is_absolute():
+                p = (sphinx.get_conf_path().parent / p).resolve()
+
+            shutil.copy(p, build_path / "versioned_sphinx.css")
+        else:
+            with open(
+                build_path / "versioned_sphinx.css", "w", encoding="utf-8"
+            ) as file:
+                file.write(config.vs_control_css)
+    else:
         shutil.copy(
-            f,
-            build_path / f.name
+            # verify_configuration makes sure this path exists
+            sphinx.get_theme_css_file(sphinx.load_conf_file().html_theme),  # type: ignore
+            build_path / "versioned_sphinx.css",
         )
 
     LOGGER.info("Writing version details...")
-    with open(build_path / "versioned_sphinx.js", 'a', encoding='utf-8') as file:
+    with open(build_path / "versioned_sphinx.js", "a", encoding="utf-8") as file:
         file.write("\n\n")
+
+        file.write("FILES_PER_VERSION = ")
+        file.write(
+            json.dumps(
+                {
+                    name: sphinx.get_html_file_names(path)
+                    for path, (name, _) in zip(built_paths, combined_with_name)
+                }
+            )
+        )
+        file.write(";\n")
+
+        file.write("THEME_INJECT_POINT = ")
+        if config.vs_inject_selector:
+            file.write(repr(config.vs_inject_selector))
+        else:
+            file.write(
+                repr(
+                    sphinx.get_theme_inject_location(sphinx.load_conf_file().html_theme)
+                )
+            )
+        file.write(";\n")
+
         file.write("VERSIONS = ")
         file.write(
             json.dumps(
@@ -96,10 +137,11 @@ def execute(config: Config, git: Git, sphinx: Sphinx):
                     {
                         "display_name": name,
                         "primary": primary_version == name,
-                        **asdict(bt)
-                    } for name, bt in combined_with_name
+                        **asdict(bt),
+                    }
+                    for name, bt in combined_with_name
                 ],
-                default=str
+                default=str,
             )
         )
         file.write(";\n")
@@ -251,6 +293,35 @@ def sort_branches_and_tags(
 
     sort = sorted(key_to_value, key=lambda x: x[0], reverse=True)
     return [kv[1] for kv in sort]
+
+
+def verify_configuration(config: Config, git: Git, sphinx: Sphinx):
+    """Verify via assertions that required parameters are available"""
+
+    conf = sphinx.load_conf_file()
+    assert hasattr(conf, "html_theme"), "'html_theme' must be defined in 'conf.py'"
+    theme = conf.html_theme
+    assert (
+        config.vs_inject_selector is not None
+        or sphinx.get_theme_inject_location(theme) is not None
+    ), (
+        f"Theme '{theme}' does not have a pre-defined inject "
+        + "location and none was provided via 'vs_inject_selector'"
+    )
+    LOGGER.info(
+        "Theme '%s' inject location: '%s'",
+        theme,
+        config.vs_inject_selector or sphinx.get_theme_inject_location(theme),
+    )
+
+    assert config.vs_control_css is not None or sphinx.get_theme_css_file(theme), (
+        f"Theme '{theme}' does not have a pre-defined CSS file "
+        + "and none was provided via 'vs_control_css'"
+    )
+
+    assert git.get_branches(config.vs_pattern) or git.get_tags(
+        config.vs_pattern
+    ), "No branches or tags found meeting requirements"
 
 
 if __name__ == "__main__":

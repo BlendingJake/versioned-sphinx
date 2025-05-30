@@ -22,6 +22,25 @@ class Config:
     of the repository. By default, this will be ``root / 'docs' / 'build'``.
     """
 
+    vs_control_css: Path | str | None = None
+    """A string containing CSS or a file path (absolute or relative to 'conf.py')
+    to a CSS file which indicates how the version selector should be styled.
+    CSS is provided by default for certain themes, any listed in 
+    :attr:`~versioned_sphinx.sphinx.THEME_INJECT_POINT`, but that can be overridden
+    or provided for an unsupported theme using this attribute.
+    
+    The inject HTML control looks like:
+    
+        .. code-block:: html
+        
+            <div class="versioned-sphinx">
+                <select></select>
+            </div>
+
+    The select control gets replaced using `choice.js <https://github.com/Choices-js/Choices>`_,
+    so refer to its documentation on how to style the selector itself.
+    """
+
     vs_current_version: str | None = None
     """The branch or tag name of the current version. Aka, the one
     which should be displayed by default.
@@ -57,6 +76,16 @@ class Config:
                 )
             else:
                 return re.match(r'v\\d+\\.\\d+\\.\\d+', branch_or_tag.name)
+    """
+
+    vs_inject_selector: str | None = None
+    """The CSS selector of an element where the versions control should
+    be added as the first element. :mod:`versioned_sphinx` provides some
+    default locations via :attr:`~versioned_sphinx.sphinx.THEME_INJECT_POINT`,
+    but this can be used to override that or specify it for an unsupported
+    theme.
+
+    Example: ``div.navigation > nav``
     """
 
     vs_pattern: str | None = None
@@ -104,6 +133,10 @@ class Config:
             ), "'vs_build_path' must be a Path or string"
             c.vs_build_path = vs_build_path
 
+        if (vs_control_css := get_attr("vs_control_css")) is not None:
+            assert isinstance(vs_control_css, (Path, str)), "'vs_control_css' must be a Path or string"
+            c.vs_control_css = vs_control_css
+
         if (vs_current_version := get_attr("vs_current_version")) is not None:
             assert isinstance(
                 vs_current_version, str
@@ -120,6 +153,10 @@ class Config:
                 vs_filter(GitTag(datetime.now(), "test")), bool
             ), "'vs_filter' must return a bool"
             c.vs_filter = vs_filter
+
+        if (vs_inject_selector := get_attr("vs_inject_selector")) is not None:
+            assert isinstance(vs_inject_selector, str), "'vs_inject_selector' must be a string"
+            c.vs_inject_selector = vs_inject_selector
 
         if (vs_pattern := get_attr("vs_pattern")) is not None:
             assert isinstance(vs_pattern, str), "'vs_pattern' must be a string"
