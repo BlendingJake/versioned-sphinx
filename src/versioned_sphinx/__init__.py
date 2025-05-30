@@ -29,7 +29,7 @@ def execute(config: Config, git: Git, sphinx: Sphinx):
         shutil.rmtree(build_path)
     build_path.mkdir(exist_ok=True)
 
-    branches = git.get_branches(config.vs_pattern)
+    branches = git.get_branches(config.vs_pattern, config.vs_git_ref_location)
     LOGGER.info("Matched branches: %s", [b.name for b in branches])
 
     tags = git.get_tags(config.vs_pattern)
