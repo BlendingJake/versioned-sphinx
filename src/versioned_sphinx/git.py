@@ -100,7 +100,7 @@ class Git:
 
         if pattern:
             args.append("-l")
-            args.append(f"'{pattern}'")
+            args.append(pattern)
 
         response = self._execute_git_command(args)
         branches: list[GitBranch] = []

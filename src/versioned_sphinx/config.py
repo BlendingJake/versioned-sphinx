@@ -4,8 +4,10 @@ from pathlib import Path
 from types import ModuleType
 from typing import Callable, Literal
 from versioned_sphinx.git import GitBranch, GitTag
+from versioned_sphinx.logger import get_logger
 
 
+LOGGER = get_logger("config")
 DisplayName = Callable[[GitBranch | GitTag], str]
 Filter = Callable[[GitBranch | GitTag], bool]
 Sort = Callable[[list[GitBranch | GitTag]], list[GitBranch | GitTag]]
@@ -178,4 +180,5 @@ class Config:
             assert callable(vs_sort), "'vs_sort' must be callable"
             c.vs_sort = vs_sort
 
+        LOGGER.debug("Final config is %s", c)
         return c

@@ -334,7 +334,7 @@ def verify_configuration(config: Config, git: Git, sphinx: Sphinx):
         + "and none was provided via 'vs_control_css'"
     )
 
-    assert git.get_branches(config.vs_pattern) or git.get_tags(
+    assert git.get_branches(config.vs_pattern, config.vs_git_ref_location) or git.get_tags(
         config.vs_pattern
     ), "No branches or tags found meeting requirements"
 
