@@ -29,6 +29,32 @@ def execute(config: Config, git: Git, sphinx: Sphinx):
         shutil.rmtree(build_path)
     build_path.mkdir(exist_ok=True)
 
+    LOGGER.info("Writing CSS and JS files...")
+    to_copy = ["choices.min.css", "choices.min.js", "versioned_sphinx.js"]
+    for f in to_copy:
+        p = Path(__file__).parent / "static" / f
+        shutil.copy(p, build_path / p.name)
+
+    # Handle control CSS
+    if config.vs_control_css:
+        if isinstance(config.vs_control_css, Path) or ".css" in config.vs_control_css:
+            p = Path(config.vs_control_css)
+            if not p.is_absolute():
+                p = (sphinx.get_conf_path().parent / p).resolve()
+
+            shutil.copy(p, build_path / "versioned_sphinx.css")
+        else:
+            with open(
+                build_path / "versioned_sphinx.css", "w", encoding="utf-8"
+            ) as file:
+                file.write(config.vs_control_css)
+    else:
+        shutil.copy(
+            # verify_configuration makes sure this path exists
+            sphinx.get_theme_css_file(sphinx.load_conf_file().html_theme),  # type: ignore
+            build_path / "versioned_sphinx.css",
+        )
+
     branches = git.get_branches(config.vs_pattern, config.vs_git_ref_location)
     LOGGER.info("Matched branches: %s", [b.name for b in branches])
 
@@ -77,32 +103,6 @@ def execute(config: Config, git: Git, sphinx: Sphinx):
 
     LOGGER.info("Writing root HTML file...")
     sphinx.write_root_html(build_path, primary_version)
-
-    LOGGER.info("Writing CSS and JS files...")
-    to_copy = ["choices.min.css", "choices.min.js", "versioned_sphinx.js"]
-    for f in to_copy:
-        p = Path(__file__).parent / "static" / f
-        shutil.copy(p, build_path / p.name)
-
-    # Handle control CSS
-    if config.vs_control_css:
-        if isinstance(config.vs_control_css, Path) or ".css" in config.vs_control_css:
-            p = Path(config.vs_control_css)
-            if not p.is_absolute():
-                p = (sphinx.get_conf_path().parent / p).resolve()
-
-            shutil.copy(p, build_path / "versioned_sphinx.css")
-        else:
-            with open(
-                build_path / "versioned_sphinx.css", "w", encoding="utf-8"
-            ) as file:
-                file.write(config.vs_control_css)
-    else:
-        shutil.copy(
-            # verify_configuration makes sure this path exists
-            sphinx.get_theme_css_file(sphinx.load_conf_file().html_theme),  # type: ignore
-            build_path / "versioned_sphinx.css",
-        )
 
     LOGGER.info("Writing version details...")
     with open(build_path / "versioned_sphinx.js", "a", encoding="utf-8") as file:

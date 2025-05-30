@@ -9,7 +9,7 @@ def setup(app: Sphinx) -> ExtensionMetadata:
     This function ensures that the appropriate CSS and JS files get
     added to the build.
     """
-    for file in (Path(__file__).parent / "static").iterdir():
+    for file in Path(app.outdir).parent.iterdir():
         if file.suffix == ".css":
             app.add_css_file(f"../../{file.name}")
         elif file.suffix == ".js":
