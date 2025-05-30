@@ -1,7 +1,11 @@
 from pathlib import Path
 from sphinx.application import Sphinx
 from sphinx.util.typing import ExtensionMetadata
+from .logger import get_logger
 from .version import __version__
+
+
+LOGGER = get_logger("ext")
 
 
 def setup(app: Sphinx) -> ExtensionMetadata:
@@ -9,7 +13,10 @@ def setup(app: Sphinx) -> ExtensionMetadata:
     This function ensures that the appropriate CSS and JS files get
     added to the build.
     """
-    for file in Path(app.outdir).parent.iterdir():
+    parent_dir = Path(app.outdir).parent
+    LOGGER.info("Adding CSS and JS files from '%s'", parent_dir)
+
+    for file in parent_dir.iterdir():
         if file.suffix == ".css":
             app.add_css_file(f"../../{file.name}")
         elif file.suffix == ".js":
