@@ -26,6 +26,7 @@ REDIRECT_HTML = """
 """
 
 THEME_INJECT_POINT: dict[str, str] = {
+    "alabaster": "div.body > section > h1",
     "sphinx_rtd_theme": "section div[role='navigation']"
 }
 """The CSS selector indicating where the versions control should

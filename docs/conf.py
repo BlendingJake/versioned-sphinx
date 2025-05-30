@@ -38,4 +38,3 @@ html_static_path = ['_static']
 
 # -- Options for versioned-sphinx -------------------------------------------------
 vs_control_css = "div {}"
-vs_inject_selector = 'div'
