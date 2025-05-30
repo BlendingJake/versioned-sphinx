@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from types import ModuleType
-from typing import Callable
+from typing import Callable, Literal
 from versioned_sphinx.git import GitBranch, GitTag
 
 
@@ -76,6 +76,13 @@ class Config:
                 )
             else:
                 return re.match(r'v\\d+\\.\\d+\\.\\d+', branch_or_tag.name)
+    """
+
+    vs_git_ref_location: Literal["all", "local", "remote"] = "remote"
+    """Whether to look at local, remote, or both branches/tags. By default, 
+    only remote branches/tags will be matched against any provided pattern.
+    To build documentation from a branch or tag which only exists locally, make
+    sure to update this to 'all' or 'local'.
     """
 
     vs_inject_selector: str | None = None
@@ -153,6 +160,11 @@ class Config:
                 vs_filter(GitTag(datetime.now(), "test")), bool
             ), "'vs_filter' must return a bool"
             c.vs_filter = vs_filter
+
+        if (vs_git_ref_location := get_attr("vs_git_ref_location")) is not None:
+            locs = ('all', 'local', 'remote')
+            assert vs_git_ref_location in locs, f"'vs_git_ref_location' must be in {repr(locs)}"
+            c.vs_git_ref_location = vs_git_ref_location
 
         if (vs_inject_selector := get_attr("vs_inject_selector")) is not None:
             assert isinstance(vs_inject_selector, str), "'vs_inject_selector' must be a string"

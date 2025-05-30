@@ -180,6 +180,20 @@ def main():
     )
 
     parser.add_argument(
+        '-l',
+        '--location',
+        type=str,
+        choices=["all", "local", "remote"],
+        default='remote',
+        help=(
+            "The location of branches/tags to use for the versions. By default, only "
+            + "remote branches or tags will be included. To build documentation "
+            + "from a branch or tag which only exists locally, make sure to update "
+            + "this to 'all' or 'local'."
+        )
+    )
+
+    parser.add_argument(
         "-r",
         "--repo",
         type=Path,
@@ -251,6 +265,7 @@ def main():
         {
             "vs_build_path": build,
             "vs_current_version": args.version,
+            "vs_git_ref_location": args.location,
             "vs_pattern": args.pattern,
         },
     )
